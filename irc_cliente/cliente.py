@@ -1,4 +1,14 @@
 import socket
+import threading
+import os
+
+def listen(socket):
+    while True:
+        data = socket.recv(1024).decode()  # receive response
+        if not data:
+            continue
+        print(data)
+
 
 def client_program():
     host = socket.gethostname()  # as both code is running on same pc
@@ -9,13 +19,12 @@ def client_program():
 
     message = ""
 
+    listen_thread = threading.Thread(target=listen, args=(client_socket,), daemon=True)
+    listen_thread.start()
+
     while message.lower().strip() != 'q':
-        client_socket.send(message.encode())  # send message
-        data = client_socket.recv(1024).decode()  # receive response
-
-        print('Received from server: ' + data)  # show in terminal
-
-        message = input(" -> ")  # again take input
+        client_socket.send(message.encode())
+        message = input()  # again take input
 
     client_socket.close()  # close the connection
 

@@ -9,6 +9,9 @@ class Channel:
         
         self.users = []
 
+    def get_users(self):
+        return self.users
+
 class Server:
 
     def __init__(self) -> None:
@@ -16,52 +19,50 @@ class Server:
         #channel name: channel instance
         self.channels = {}
 
-        # username: connection
+        # nickname: connection
         self.users = {}
         
         self.instructions = {
-            # "NICK": self.change_username,
+            # "NICK": self.change_nickname,
             "QUIT": self.logout,
             "JOIN": self.join_channel,
             "LIST": self.list_channels
         }
 
     def login(self, conn) -> str:
-
-        data = "Faça login com USER <username>"
+        
+        data = "Faça login com NICK <nickname>" 
         conn.send(data.encode())
-
         data = conn.recv(1024).decode().split(" ")
-
         while True:
 
-            if data[0] != "USER":
-                data = "Login before using a chat"
+            if data[0] != "NICK":
+                data = "Faça login com NICK <nickname>" 
                 conn.send(data.encode())
                 data = conn.recv(1024).decode().split(" ")
                 continue
 
-            username = data[1]
+            nickname = data[1]
 
-            if username in self.users:
-                data = "Usuário já logado"
+            if nickname in self.users:
+                data = "\nERR_NICKNAMEINUSE"
                 conn.send(data.encode())
                 continue
         
             break
 
-        self.users[username] = conn
-        print(username + " logged in")
+        self.users[nickname] = conn
+        print(nickname + " logged in")
         data = "Login successful"
         conn.send(data.encode())
 
-        return username
+        return nickname
 
-    def logout(self, username, conn, param):
+    def logout(self, nickname, conn, param):
         conn.close()
         exit()
         
-    def join_channel(self, username, conn, channel_name) -> None:
+    def join_channel(self, nickname, conn, channel_name) -> None:
         
         if channel_name not in Channel.channels:
             current_channel = Channel()
@@ -75,30 +76,30 @@ class Server:
         conn.send(data.encode())
 
         data = ""
-        while  data.split(" ")[0] != "PART":
-            data = conn.recv(1024).decode()
+        while  True:
+            data =  "<" + nickname + "> "+ conn.recv(1024).decode()
             for user_conn in current_channel.users:
                 user_conn.send(data.encode())
         
         return
 
-    def list_channels(self, username, conn, param):
+    def list_channels(self, nickname, conn, param):
         pass
 
 
     def thread_cliente(self, conn) -> None:
 
-        username = self.login(conn)
+        nickname = self.login(conn)
 
         while True:
             # receive data stream. it won't accept data packet greater than 1024 bytes
             data = conn.recv(1024).decode()
-            print(username + " sent " + data)
+            print(nickname + " sent " + data)
             data = data.split(" ")
 
             instruction = data[0]
             if instruction in self.instructions:
-                self.instructions[data[0]](username, conn, data[1])
+                self.instructions[data[0]](nickname, conn, data[1])
             else:
                 data = "Instruction not valid"
                 conn.send(data.encode())
