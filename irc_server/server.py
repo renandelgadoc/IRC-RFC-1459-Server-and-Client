@@ -7,7 +7,7 @@ class Channel:
 
     def __init__(self) -> None:
         
-        self.users = []
+        self.users = {}
 
     def get_users(self):
         return self.users
@@ -45,7 +45,7 @@ class Server:
             nickname = data[1]
 
             if nickname in self.users:
-                data = "\nERR_NICKNAMEINUSE"
+                data = "ERR_NICKNAMEINUSE"
                 conn.send(data.encode())
                 continue
         
@@ -69,7 +69,7 @@ class Server:
             Channel.channels[channel_name] = current_channel
         current_channel =  Channel.channels[channel_name]
         
-        current_channel.users.append(conn)
+        current_channel.users[nickname] = conn
 
         data = "Connected to " + channel_name
         print(*Channel.channels[channel_name].users)
@@ -77,9 +77,16 @@ class Server:
 
         data = ""
         while  True:
-            data =  "<" + nickname + "> "+ conn.recv(1024).decode()
-            for user_conn in current_channel.users:
-                user_conn.send(data.encode())
+            data =conn.recv(1024).decode()
+            if "PART" in data:
+                data = nickname + " left the server"
+                for user in current_channel.users:
+                    current_channel.users[user].send(data.encode())
+                del current_channel.users[nickname]
+                break
+            data =   "<" + nickname + "> " + data
+            for user in current_channel.users:
+                current_channel.users[user].send(data.encode())
         
         return
 
