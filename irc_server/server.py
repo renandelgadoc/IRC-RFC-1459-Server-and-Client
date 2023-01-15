@@ -30,16 +30,22 @@ class Server:
         }
 
     def login(self, conn) -> str:
-        
-        data = "Faça login com NICK <nickname>" 
-        conn.send(data.encode())
-        data = conn.recv(1024).decode().split(" ")
+
         while True:
 
-            if data[0] != "NICK":
-                data = "Faça login com NICK <nickname>" 
+            data = "Faça login com NICK <nickname>" 
+            conn.send(data.encode())
+            data = conn.recv(1024).decode().split(" ")
+
+            if len(data) == 1:
+                data = "Nickname name not specified\n"
                 conn.send(data.encode())
-                data = conn.recv(1024).decode().split(" ")
+                continue
+            elif len(data) > 2:
+                data = "Invalid character in nickname\n"
+                conn.send(data.encode())
+                continue
+            elif data[0] != "NICK":
                 continue
 
             nickname = data[1]
@@ -58,12 +64,22 @@ class Server:
 
         return nickname
 
-    def logout(self, nickname, conn, param):
+    def logout(self, nickname, conn, params):
         conn.close()
         exit()
         
-    def join_channel(self, nickname, conn, channel_name) -> None:
-        
+    def join_channel(self, nickname, conn, params) -> None:
+
+        if len(params) == 1:
+            data = "Channel name not specified"
+            conn.send(data.encode())
+            return
+        elif len(params) > 2:
+            data = "It is only possible to join one channel at a time"
+            conn.send(data.encode())
+            return
+        channel_name = params[1]
+
         if channel_name not in Channel.channels:
             current_channel = Channel()
             Channel.channels[channel_name] = current_channel
@@ -90,27 +106,38 @@ class Server:
         
         return
 
-    def list_channels(self, nickname, conn, param):
+    def list_channels(self, nickname, conn, params):
         pass
 
 
     def thread_cliente(self, conn) -> None:
 
-        nickname = self.login(conn)
+            nickname = self.login(conn)
 
-        while True:
-            # receive data stream. it won't accept data packet greater than 1024 bytes
-            data = conn.recv(1024).decode()
-            print(nickname + " sent " + data)
-            data = data.split(" ")
+            while True:
+                try:
 
-            instruction = data[0]
-            if instruction in self.instructions:
-                self.instructions[data[0]](nickname, conn, data[1])
-            else:
-                data = "Instruction not valid"
-                conn.send(data.encode())
-                continue
+                    # receive data stream. it won't accept data packet greater than 1024 bytes
+                    data = conn.recv(1024).decode()
+                    print(nickname + " sent " + data)
+
+                    # Remove space duplicates and split input in a list
+                    data = " ".join(data.split(" "))
+                    data = data.split(" ")
+
+                    # Check if the instruction is valid and call corresponding function
+                    instruction = data[0]
+                    if instruction in self.instructions:
+                        self.instructions[data[0]](nickname, conn, data)
+                    else:
+                        data = "Instruction not valid"
+                        conn.send(data.encode())
+                        continue
+
+                except:
+                    print("Error")
+                    data = "Server Error"
+                    conn.send(data.encode())
 
 
     def server_program(self) -> None:
@@ -128,9 +155,10 @@ class Server:
         while True:
             conn, address = server_socket.accept()  # accept new connection
             print("Connection from: " + str(address))
+
+            # Start a new thread for a client and close connection if anything goes wrong
             x = threading.Thread(target=self.thread_cliente, args=(conn,), daemon=True)
             x.start()
-
 
 if __name__ == '__main__':
     server = Server()
