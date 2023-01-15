@@ -1,11 +1,11 @@
 # TR2-Trabalho-1
 
 ## Funções a implementar
-  - NICK
+  - NICK 🟢
   - USER
   - QUIT
-  - JOIN
-  - PART
+  - JOIN 🟢
+  - PART 🟢
   - LIST
   - PRIVMSG
   - WHO
