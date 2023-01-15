@@ -8,6 +8,7 @@ class User:
         self.conn = conn
         self.channel = None
         self.nickname = ""
+        
 
 class Server:
 
@@ -52,11 +53,12 @@ class Server:
 
         nickname = params[1]
 
+        # Verify if another user has the choosen nickname
         for a in self.users:
             if nickname == a.nickname:
                 data = "ERR_NICKNAMEINUSE"
                 user.conn.send(data.encode())
-                return ""
+                return
 
         # First login
         if user.nickname == "":
@@ -64,7 +66,7 @@ class Server:
             print(nickname + " logged in")
             data = "Login successful"
             user.conn.send(data.encode())
-            return nickname
+            return
 
         # Change nickname
         for a in self.users:
@@ -73,10 +75,12 @@ class Server:
         user.nickname = nickname
         data = "Login successful"
         user.conn.send(data.encode())
+        return
 
-        return nickname
+    def logout(self, user, params) -> None:
 
-    def logout(self, user, params):
+        if not self.validate_params(params, expected_number = 1):
+            raise Exception()
         user.conn.close()
         exit()
         
@@ -107,6 +111,7 @@ class Server:
             user = User(conn)
             self.users.append(user)
 
+            # Obly user to send NICK command before using the chats
             while True:
                 try:
                     data = conn.recv(1024).decode()
@@ -119,6 +124,7 @@ class Server:
 
                     if user.nickname != "":
                         break
+
                 except:
                     print("Error")
                     data = "Server Error"
@@ -126,35 +132,43 @@ class Server:
 
 
             while True:
-                try:
+                # try:
 
-                    # receive data stream. it won't accept data packet greater than 1024 bytes
-                    data = conn.recv(1024).decode()
-                    print(user.nickname + " sent " + data)
+                # receive data stream. it won't accept data packet greater than 1024 bytes
+                data = conn.recv(1024).decode()
+                print(user.nickname + " sent " + data)
 
-                    # Remove space duplicates and split input in a list
-                    data = " ".join(data.split(" "))
-                    data = data.split(" ")
+                # Remove space duplicates and split input in a list
+                data = " ".join(data.split(" "))
+                data = data.split(" ")
 
-                    # Check if the instruction is valid and call corresponding function
-                    instruction = data[0]
-                    if instruction in self.instructions:
-                        self.instructions[data[0]](user, data)
+                # Check if the instruction is valid and call corresponding function
+                instruction = data[0]
+                if instruction == "QUIT":
+                    user.conn.close()
+                    data = "server informing users that " + user.nickname + " closed his connection to the server"
+                    for a in self.users:
+                        if a.channel == user.channel and a != user:
+                            a.conn.send(data.encode())
+                    self.users.remove(user)
+                    return
+                elif instruction in self.instructions:
+                    self.instructions[data[0]](user, data)
 
-                    # If the user is connected to a channel, sent message to all users in it
-                    elif user.channel:
-                        data =   "<" + user.nickname + "> " + " ".join(data)
-                        for a in self.users:
-                            if a.channel == user.channel:
-                                a.conn.send(data.encode())
-                    else:
-                        data = "Instruction not valid"
-                        conn.send(data.encode())
-                        continue
-                except:
-                    print("Error")
-                    data = "Server Error"
+                # If the user is connected to a channel, sent message to all users in it
+                elif user.channel:
+                    data =   "<" + user.nickname + "> " + " ".join(data)
+                    for a in self.users:
+                        if a.channel == user.channel:
+                            a.conn.send(data.encode())
+                else:
+                    data = "Instruction not valid"
                     conn.send(data.encode())
+                    continue
+                # except:
+                #     print("Error")
+                #     data = "Server Error"
+                #     conn.send(data.encode())
 
 
             
@@ -162,7 +176,9 @@ class Server:
     def server_program(self) -> None:
         # get the hostname
         host = socket.gethostname()
-        port = 6667  # initiate port no above 1024
+        port = 6667        
+        # port = 6666
+
 
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # get instance
         # look closely. The bind() function takes tuple as argument
