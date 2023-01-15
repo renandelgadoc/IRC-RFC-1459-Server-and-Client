@@ -1,110 +1,102 @@
 import socket
 import threading
 
-class Channel:
+class User:
 
-    channels = {}
+    def __init__(self, conn) -> None:
 
-    def __init__(self) -> None:
-        
-        self.users = {}
-
-    def get_users(self):
-        return self.users
+        self.conn = conn
+        self.channel = None
+        self.nickname = ""
 
 class Server:
 
     def __init__(self) -> None:
 
         #channel name: channel instance
-        self.channels = {}
+        self.channels = []
 
         # nickname: connection
-        self.users = {}
+        self.users = []
         
         self.instructions = {
-            # "NICK": self.change_nickname,
+            "PART": self.leave_channel,
+            "NICK": self.change_nick,
             "QUIT": self.logout,
             "JOIN": self.join_channel,
             "LIST": self.list_channels
         }
 
-    def login(self, conn) -> str:
-
-        while True:
-
-            data = "Faça login com NICK <nickname>" 
-            conn.send(data.encode())
-            data = conn.recv(1024).decode().split(" ")
-
-            if len(data) == 1:
-                data = "Nickname name not specified\n"
-                conn.send(data.encode())
-                continue
-            elif len(data) > 2:
-                data = "Invalid character in nickname\n"
-                conn.send(data.encode())
-                continue
-            elif data[0] != "NICK":
-                continue
-
-            nickname = data[1]
-
-            if nickname in self.users:
-                data = "ERR_NICKNAMEINUSE"
-                conn.send(data.encode())
-                continue
+    def validate_params(self, params, expected_number) -> bool:
+        if len(params) != expected_number:
+            return False
+        return True
         
-            break
+    def leave_channel(self, user, params) -> None:
 
-        self.users[nickname] = conn
-        print(nickname + " logged in")
+        if not self.validate_params(params, expected_number = 1):
+            raise Exception()
+
+        data = user.nickname + " left the server"
+        for a in self.users:
+            if a.channel == user.channel:
+                a.conn.send(data.encode())
+        user.channel = None
+
+        return
+
+    def change_nick(self, user, params) -> str:
+
+        if not self.validate_params(params, expected_number = 2):
+            raise Exception()
+
+        nickname = params[1]
+
+        for a in self.users:
+            if nickname == a.nickname:
+                data = "ERR_NICKNAMEINUSE"
+                user.conn.send(data.encode())
+                return ""
+
+        # First login
+        if user.nickname == "":
+            user.nickname = nickname
+            print(nickname + " logged in")
+            data = "Login successful"
+            user.conn.send(data.encode())
+            return nickname
+
+        # Change nickname
+        for a in self.users:
+            data = "user changes nickname from " + user.nickname + " to " + nickname
+            a.conn.send(data.encode())
+        user.nickname = nickname
         data = "Login successful"
-        conn.send(data.encode())
+        user.conn.send(data.encode())
 
         return nickname
 
-    def logout(self, nickname, conn, params):
-        conn.close()
+    def logout(self, user, params):
+        user.conn.close()
         exit()
         
-    def join_channel(self, nickname, conn, params) -> None:
+    def join_channel(self, user, params) -> None:
 
-        if len(params) == 1:
-            data = "Channel name not specified"
-            conn.send(data.encode())
-            return
-        elif len(params) > 2:
-            data = "It is only possible to join one channel at a time"
-            conn.send(data.encode())
-            return
-        channel_name = params[1]
+        if not self.validate_params(params, expected_number = 2):
+            raise Exception()
 
-        if channel_name not in Channel.channels:
-            current_channel = Channel()
-            Channel.channels[channel_name] = current_channel
-        current_channel =  Channel.channels[channel_name]
-        
-        current_channel.users[nickname] = conn
+        current_channel = params[1]
 
-        data = "Connected to " + channel_name
-        print(*Channel.channels[channel_name].users)
-        conn.send(data.encode())
+        # Add channel to self.channels if it doesn`t exist
+        if current_channel not in self.channels:
+            self.channels.append(current_channel)
 
-        data = ""
-        while  True:
-            data =conn.recv(1024).decode()
-            if "PART" in data:
-                data = nickname + " left the server"
-                for user in current_channel.users:
-                    current_channel.users[user].send(data.encode())
-                del current_channel.users[nickname]
-                break
-            data =   "<" + nickname + "> " + data
-            for user in current_channel.users:
-                current_channel.users[user].send(data.encode())
-        
+        user.channel = current_channel
+        data = "Connected to " + current_channel
+        user.conn.send(data.encode())
+
         return
+
 
     def list_channels(self, nickname, conn, params):
         pass
@@ -112,14 +104,33 @@ class Server:
 
     def thread_cliente(self, conn) -> None:
 
-            nickname = self.login(conn)
+            user = User(conn)
+            self.users.append(user)
+
+            while True:
+                try:
+                    data = conn.recv(1024).decode()
+
+                    # Remove space duplicates and split input in a list
+                    data = " ".join(data.split(" "))
+                    data = data.split(" ")
+
+                    self.change_nick(user, data)
+
+                    if user.nickname != "":
+                        break
+                except:
+                    print("Error")
+                    data = "Server Error"
+                    conn.send(data.encode())
+
 
             while True:
                 try:
 
                     # receive data stream. it won't accept data packet greater than 1024 bytes
                     data = conn.recv(1024).decode()
-                    print(nickname + " sent " + data)
+                    print(user.nickname + " sent " + data)
 
                     # Remove space duplicates and split input in a list
                     data = " ".join(data.split(" "))
@@ -128,17 +139,25 @@ class Server:
                     # Check if the instruction is valid and call corresponding function
                     instruction = data[0]
                     if instruction in self.instructions:
-                        self.instructions[data[0]](nickname, conn, data)
+                        self.instructions[data[0]](user, data)
+
+                    # If the user is connected to a channel, sent message to all users in it
+                    elif user.channel:
+                        data =   "<" + user.nickname + "> " + " ".join(data)
+                        for a in self.users:
+                            if a.channel == user.channel:
+                                a.conn.send(data.encode())
                     else:
                         data = "Instruction not valid"
                         conn.send(data.encode())
                         continue
-
                 except:
                     print("Error")
                     data = "Server Error"
                     conn.send(data.encode())
 
+
+            
 
     def server_program(self) -> None:
         # get the hostname
