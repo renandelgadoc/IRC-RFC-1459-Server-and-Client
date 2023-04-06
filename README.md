@@ -1,6 +1,4 @@
-# TR2-Trabalho-1
-
-## IRC RFC 1459 Server
+# IRC RFC 1459 Server
 
 ## how to run
 
