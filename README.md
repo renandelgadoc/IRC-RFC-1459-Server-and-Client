@@ -1,4 +1,4 @@
-# IRC RFC 1459 Server
+# IRC RFC 1459 Server and Client
 
 ## how to run
 
